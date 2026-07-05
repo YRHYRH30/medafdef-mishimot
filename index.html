@@ -45,7 +45,10 @@
   header{display:flex;align-items:baseline;justify-content:space-between}
   h1{font-size:26px;font-weight:900;letter-spacing:-.5px}
   h1 .dot{color:var(--later)}
-  .date{font-size:13px;font-weight:600;opacity:.65}
+  .date{font-size:13px;font-weight:600;opacity:.65;display:flex;align-items:center;gap:6px}
+  .sync-dot{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--ink);display:inline-block;flex:none}
+  .sync-dot.on{background:var(--go)}
+  .sync-dot.off{background:#d8cfb6}
 
   /* ---------- add row ---------- */
   .add-row{display:flex;gap:8px}
@@ -212,7 +215,7 @@
 <div class="app">
   <header>
     <h1>מדפדף המשימות<span class="dot">.</span></h1>
-    <div class="date" id="dateLabel"></div>
+    <div class="date"><span class="sync-dot off" id="syncDot" title="סנכרון"></span><span id="dateLabel"></span></div>
   </header>
 
   <div class="add-row">
@@ -246,26 +249,64 @@
   let activeTab='today';
   let addSize='small';
 
+  // new day? everything unfinished returns to the pile for re-sorting
+  function migrateDay(s){
+    if(s.lastDay!==todayStr()){
+      s.tasks=s.tasks.filter(t=>t.status!=='done');
+      s.tasks.forEach(t=>t.status='pile');
+      s.lastDay=todayStr();
+      s.migrated=true;
+    }
+    return s;
+  }
+
   function load(){
     try{
       const s=JSON.parse(localStorage.getItem(KEY));
       if(s && Array.isArray(s.tasks)){
-        // new day? everything unfinished returns to the pile for re-sorting
-        if(s.lastDay!==todayStr()){
-          s.tasks=s.tasks.filter(t=>t.status!=='done');
-          s.tasks.forEach(t=>t.status='pile');
-          s.lastDay=todayStr();
-        }
-        return s;
+        s.rev=s.rev||0;
+        return migrateDay(s);
       }
     }catch(e){}
-    return {lastDay:todayStr(),tasks:[
+    return {rev:0,lastDay:todayStr(),tasks:[
       {id:1,text:'להחליק אותי ימינה כדי לעשות היום 👉',size:'small',status:'pile'},
       {id:2,text:'להחליק אותי שמאלה — לפעם אחרת 👈',size:'small',status:'pile'},
       {id:3,text:'להוסיף משימה אמיתית למעלה ➕',size:'big',status:'pile'}
     ]};
   }
-  function save(){localStorage.setItem(KEY,JSON.stringify(state));}
+  function save(){
+    state.rev=(state.rev||0)+1;
+    delete state.migrated;
+    localStorage.setItem(KEY,JSON.stringify(state));
+    push();
+  }
+
+  /* ---------- sync (multi-device, last-write-wins by rev) ---------- */
+  const SYNC_URL='https://jsonblob.com/api/jsonBlob/019f3385-5a08-7059-b484-ec374ba7bdab';
+  const dot=()=>document.getElementById('syncDot');
+  function setDot(ok){const d=dot();if(d)d.className='sync-dot '+(ok?'on':'off');}
+  function push(){
+    fetch(SYNC_URL,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)})
+      .then(r=>setDot(r.ok)).catch(()=>setDot(false));
+  }
+  function pull(){
+    fetch(SYNC_URL,{cache:'no-store'}).then(r=>r.json()).then(remote=>{
+      setDot(true);
+      if(!remote||!Array.isArray(remote.tasks))return;
+      const rRev=remote.rev||0, lRev=state.rev||0;
+      if(rRev>lRev){
+        remote.migrated=false;
+        state=migrateDay(remote);
+        if(state.migrated){save();}                 // day rolled over on adopt → publish reset
+        else localStorage.setItem(KEY,JSON.stringify(state));
+        history=[];
+        renderDeck();renderList();
+      }else if(lRev>rRev){push();}                  // we're ahead (offline edits) → publish
+    }).catch(()=>setDot(false));
+  }
+  pull();
+  setInterval(()=>{if(!document.hidden)pull();},4000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)pull();});
 
   const pile=()=>state.tasks.filter(t=>t.status==='pile');
 
