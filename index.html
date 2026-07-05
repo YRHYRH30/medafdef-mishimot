@@ -45,7 +45,13 @@
   header{display:flex;align-items:baseline;justify-content:space-between}
   h1{font-size:26px;font-weight:900;letter-spacing:-.5px}
   h1 .dot{color:var(--later)}
+  .side{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
   .date{font-size:13px;font-weight:600;opacity:.65;display:flex;align-items:center;gap:6px}
+  .pot{
+    font-size:14px;font-weight:900;
+    border:2.5px solid var(--ink);border-radius:999px;
+    background:var(--white);padding:3px 12px;
+  }
   .sync-dot{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--ink);display:inline-block;flex:none}
   .sync-dot.on{background:var(--go)}
   .sync-dot.off{background:#d8cfb6}
@@ -75,6 +81,15 @@
     transition:transform .1s, box-shadow .1s;
   }
   .btn-add:active{transform:translateY(4px);box-shadow:0 2px 0 rgba(51,48,46,.9)}
+
+  /* ---------- price chips ---------- */
+  .price-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:-4px}
+  .price-label{font-size:13px;font-weight:800;opacity:.6}
+  .chip{
+    border:2px solid var(--ink);border-radius:999px;background:var(--white);
+    font:inherit;font-weight:800;font-size:13px;padding:4px 12px;cursor:pointer;
+  }
+  .chip.active{background:var(--ink);color:var(--butter)}
 
   /* ---------- deck ---------- */
   .deck{
@@ -110,6 +125,8 @@
     padding:3px 12px;background:var(--butter-deep);
   }
   .badge.big{background:var(--later-soft)}
+  .badge.price{background:var(--go-soft)}
+  .badges{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
   .pile-count{font-size:12px;font-weight:600;opacity:.5}
 
   /* stamps */
@@ -196,6 +213,12 @@
     border:2px solid var(--ink);border-radius:10px;background:var(--butter-deep);
     font:inherit;font-size:12px;font-weight:800;padding:4px 9px;cursor:pointer;white-space:nowrap;
   }
+  .price-tag{
+    font-size:12px;font-weight:900;flex:none;
+    border:2px solid var(--ink);border-radius:999px;
+    background:var(--go-soft);padding:2px 8px;
+  }
+  li.done .price-tag{background:var(--butter-deep)}
   .del{border:none;background:none;font-size:15px;cursor:pointer;opacity:.4;padding:2px}
   .del:hover{opacity:1}
   .list-empty{text-align:center;font-weight:600;opacity:.5;font-size:14px;padding:14px 0}
@@ -215,13 +238,24 @@
 <div class="app">
   <header>
     <h1>מדפדף המשימות<span class="dot">.</span></h1>
-    <div class="date"><span class="sync-dot off" id="syncDot" title="סנכרון"></span><span id="dateLabel"></span></div>
+    <div class="side">
+      <div class="date"><span class="sync-dot off" id="syncDot" title="סנכרון"></span><span id="dateLabel"></span></div>
+      <div class="pot" id="potLabel">💰 0 ₪</div>
+    </div>
   </header>
 
   <div class="add-row">
     <input id="taskInput" type="text" maxlength="80" placeholder="משימה חדשה לערימה…">
     <button class="size-toggle" id="sizeToggle" title="גודל המשימה">קטנה</button>
     <button class="btn-add" id="addBtn" aria-label="הוספה">+</button>
+  </div>
+  <div class="price-row" id="priceRow">
+    <span class="price-label">שווי:</span>
+    <button class="chip active" data-price="0">בלי</button>
+    <button class="chip" data-price="10">₪10</button>
+    <button class="chip" data-price="20">₪20</button>
+    <button class="chip" data-price="50">₪50</button>
+    <button class="chip" data-price="custom">אחר…</button>
   </div>
 
   <div class="deck" id="deck"></div>
@@ -248,6 +282,7 @@
   let history=[];           // swipe undo stack
   let activeTab='today';
   let addSize='small';
+  let addPrice=0;
 
   // new day? everything unfinished returns to the pile for re-sorting
   function migrateDay(s){
@@ -264,11 +299,11 @@
     try{
       const s=JSON.parse(localStorage.getItem(KEY));
       if(s && Array.isArray(s.tasks)){
-        s.rev=s.rev||0;
+        s.rev=s.rev||0;s.pot=s.pot||0;
         return migrateDay(s);
       }
     }catch(e){}
-    return {rev:0,lastDay:todayStr(),tasks:[
+    return {rev:0,pot:0,lastDay:todayStr(),tasks:[
       {id:1,text:'להחליק אותי ימינה כדי לעשות היום 👉',size:'small',status:'pile'},
       {id:2,text:'להחליק אותי שמאלה — לפעם אחרת 👈',size:'small',status:'pile'},
       {id:3,text:'להוסיף משימה אמיתית למעלה ➕',size:'big',status:'pile'}
@@ -293,6 +328,7 @@
     fetch(SYNC_URL,{cache:'no-store'}).then(r=>r.json()).then(remote=>{
       setDot(true);
       if(!remote||!Array.isArray(remote.tasks))return;
+      remote.pot=remote.pot||0;
       const rRev=remote.rev||0, lRev=state.rev||0;
       if(rRev>lRev){
         remote.migrated=false;
@@ -356,7 +392,10 @@
       <div class="stamp no">אחר כך</div>
       ${faceSVG()}
       <div class="task-text"></div>
-      <div class="badge ${t.size==='big'?'big':''}">${t.size==='big'?'משימה גדולה':'משימה קטנה'}</div>
+      <div class="badges">
+        <div class="badge ${t.size==='big'?'big':''}">${t.size==='big'?'משימה גדולה':'משימה קטנה'}</div>
+        ${t.price>0?`<div class="badge price">₪${t.price}</div>`:''}
+      </div>
       <div class="pile-count">עוד ${p.length-1} בערימה</div>`;
     c.querySelector('.task-text').textContent=t.text;
     deck.appendChild(c);
@@ -445,10 +484,25 @@
     sizeToggle.textContent=addSize==='big'?'גדולה':'קטנה';
     sizeToggle.classList.toggle('big',addSize==='big');
   });
+  /* price chips */
+  const priceRow=document.getElementById('priceRow');
+  priceRow.addEventListener('click',e=>{
+    const chip=e.target.closest('.chip');if(!chip)return;
+    let p=chip.dataset.price;
+    if(p==='custom'){
+      const v=prompt('כמה שווה המשימה? (₪)');
+      const n=parseInt(v,10);
+      if(!v||isNaN(n)||n<=0)return;
+      p=n;chip.textContent='₪'+n;
+    }
+    addPrice=Number(p);
+    priceRow.querySelectorAll('.chip').forEach(c=>c.classList.toggle('active',c===chip));
+  });
+
   function addTask(){
     const text=input.value.trim();
     if(!text)return;
-    state.tasks.push({id:Date.now(),text,size:addSize,status:'pile'});
+    state.tasks.push({id:Date.now(),text,size:addSize,price:addPrice,status:'pile'});
     input.value='';
     save();renderDeck();renderList();
   }
@@ -466,7 +520,12 @@
     renderList();
   }));
 
+  function renderPot(){
+    document.getElementById('potLabel').textContent='💰 '+(state.pot||0)+' ₪';
+  }
+
   function renderList(){
+    renderPot();
     const today=state.tasks.filter(t=>t.status==='today'||t.status==='done');
     const later=state.tasks.filter(t=>t.status==='later');
     tabToday.textContent=`היום (${today.filter(t=>t.status==='today').length})`;
@@ -490,6 +549,7 @@
         ch.setAttribute('aria-label','סימון כבוצע');
         ch.addEventListener('click',()=>{
           t.status=t.status==='done'?'today':'done';
+          if(t.price>0)state.pot=(state.pot||0)+(t.status==='done'?t.price:-t.price);
           save();renderList();
           if(t.status==='done'&&!state.tasks.some(x=>x.status==='today'))confetti();
         });
@@ -501,6 +561,11 @@
           t.status='pile';save();renderDeck();renderList();
         });
         li.append(txt,back);
+      }
+      if(t.price>0){
+        const pr=document.createElement('span');
+        pr.className='price-tag';pr.textContent='₪'+t.price;
+        li.append(pr);
       }
       const del=document.createElement('button');
       del.className='del';del.textContent='🗑';
