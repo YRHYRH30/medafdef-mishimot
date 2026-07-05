@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>מדפדף המשימות</title>
+<meta name="theme-color" content="#FFF3C4">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="משימות">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --butter:#FFF3C4;
+    --butter-deep:#FFE58A;
+    --ink:#33302E;
+    --white:#FFFFFF;
+    --go:#3DBB7E;
+    --go-soft:#D9F5E7;
+    --later:#FF9B71;
+    --later-soft:#FFE4D6;
+    --blue:#6DA7FF;
+    --shadow:0 6px 0 rgba(51,48,46,.9);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    font-family:'Rubik','Segoe UI',system-ui,sans-serif;
+    background:var(--butter);
+    background-image:radial-gradient(rgba(51,48,46,.06) 1.5px, transparent 1.5px);
+    background-size:26px 26px;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+    min-height:100dvh;
+    overflow-x:hidden;
+  }
+  .app{width:100%;max-width:440px;padding:18px 16px 40px;display:flex;flex-direction:column;gap:14px}
+
+  /* ---------- header ---------- */
+  header{display:flex;align-items:baseline;justify-content:space-between}
+  h1{font-size:26px;font-weight:900;letter-spacing:-.5px}
+  h1 .dot{color:var(--later)}
+  .date{font-size:13px;font-weight:600;opacity:.65}
+
+  /* ---------- add row ---------- */
+  .add-row{display:flex;gap:8px}
+  .add-row input{
+    flex:1;min-width:0;
+    border:2.5px solid var(--ink);border-radius:16px;
+    background:var(--white);
+    font:inherit;font-weight:600;font-size:15px;
+    padding:11px 14px;outline:none;
+  }
+  .add-row input:focus{box-shadow:0 0 0 3px var(--blue)}
+  .add-row input::placeholder{color:#b3aa95}
+  .size-toggle{
+    border:2.5px solid var(--ink);border-radius:16px;background:var(--white);
+    font:inherit;font-weight:800;font-size:14px;padding:0 13px;cursor:pointer;
+    transition:background .15s;white-space:nowrap;
+  }
+  .size-toggle.big{background:var(--later-soft)}
+  .btn-add{
+    border:2.5px solid var(--ink);border-radius:16px;
+    background:var(--go);color:var(--white);
+    font-size:24px;font-weight:900;line-height:1;
+    width:48px;cursor:pointer;box-shadow:var(--shadow);
+    transition:transform .1s, box-shadow .1s;
+  }
+  .btn-add:active{transform:translateY(4px);box-shadow:0 2px 0 rgba(51,48,46,.9)}
+
+  /* ---------- deck ---------- */
+  .deck{
+    position:relative;height:340px;
+    display:flex;align-items:center;justify-content:center;
+    touch-action:pan-y;
+  }
+  .circle{
+    position:absolute;
+    width:290px;height:290px;border-radius:50%;
+    background:var(--white);
+    border:3.5px solid var(--ink);
+    box-shadow:0 8px 0 rgba(51,48,46,.85);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:8px;padding:34px;text-align:center;
+    user-select:none;-webkit-user-select:none;
+    cursor:grab;
+  }
+  .circle.behind{
+    transform:scale(.88) translateY(14px);
+    box-shadow:none;opacity:.55;cursor:default;
+    background:#FFFBEA;
+  }
+  .circle.dragging{cursor:grabbing;transition:none !important}
+  .circle.animate{transition:transform .35s cubic-bezier(.34,1.4,.64,1), opacity .3s}
+  .circle .task-text{
+    font-size:20px;font-weight:800;line-height:1.25;
+    max-height:3.8em;overflow:hidden;overflow-wrap:break-word;width:100%;
+  }
+  .badge{
+    font-size:12px;font-weight:800;
+    border:2px solid var(--ink);border-radius:999px;
+    padding:3px 12px;background:var(--butter-deep);
+  }
+  .badge.big{background:var(--later-soft)}
+  .pile-count{font-size:12px;font-weight:600;opacity:.5}
+
+  /* stamps */
+  .stamp{
+    position:absolute;top:44px;
+    font-size:22px;font-weight:900;letter-spacing:1px;
+    border:3.5px solid;border-radius:12px;padding:4px 14px;
+    background:var(--white);opacity:0;pointer-events:none;
+  }
+  .stamp.yes{right:26px;color:var(--go);border-color:var(--go);transform:rotate(14deg)}
+  .stamp.no{left:26px;color:var(--later);border-color:var(--later);transform:rotate(-14deg)}
+
+  /* face */
+  .face{width:74px;height:60px;flex:none}
+  .face .eye-l,.face .eye-r{transition:none}
+  .face .mouth-happy,.face .eye-closed-l,.face .eye-closed-r,.face .zzz{display:none}
+  .circle.mood-happy .mouth-normal,.circle.mood-happy .eye-l,.circle.mood-happy .eye-r{display:none}
+  .circle.mood-happy .mouth-happy{display:block}
+  .circle.mood-happy .eye-closed-l,.circle.mood-happy .eye-closed-r{display:block}
+  .circle.mood-sleepy .eye-l,.circle.mood-sleepy .eye-r,.circle.mood-sleepy .mouth-normal{display:none}
+  .circle.mood-sleepy .eye-closed-l,.circle.mood-sleepy .eye-closed-r{display:block}
+  .circle.mood-sleepy .zzz{display:block}
+  .circle.mood-sleepy .mouth-happy{display:none}
+  .circle.mood-sleepy .mouth-sleepy{display:block}
+  .mouth-sleepy{display:none}
+
+  /* empty state */
+  .empty{
+    width:290px;height:290px;border-radius:50%;
+    background:var(--go-soft);border:3.5px dashed var(--ink);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:10px;text-align:center;padding:30px;
+  }
+  .empty .big-emoji{font-size:52px}
+  .empty p{font-weight:800;font-size:19px}
+  .empty small{font-weight:600;opacity:.6;font-size:13px}
+
+  /* ---------- action buttons ---------- */
+  .actions{display:flex;justify-content:center;gap:26px;direction:ltr;margin-top:-4px}
+  .act{
+    display:flex;flex-direction:column;align-items:center;gap:6px;
+    background:none;border:none;cursor:pointer;font:inherit;
+  }
+  .act .ring{
+    width:66px;height:66px;border-radius:50%;
+    border:3px solid var(--ink);
+    display:flex;align-items:center;justify-content:center;
+    font-size:28px;box-shadow:var(--shadow);
+    transition:transform .1s, box-shadow .1s;
+    background:var(--white);
+  }
+  .act:active .ring{transform:translateY(4px);box-shadow:0 2px 0 rgba(51,48,46,.9)}
+  .act.yes .ring{background:var(--go)}
+  .act.no .ring{background:var(--later)}
+  .act.undo .ring{width:48px;height:48px;font-size:19px;box-shadow:0 4px 0 rgba(51,48,46,.9)}
+  .act span{font-size:13px;font-weight:800}
+  .act:disabled{opacity:.35;cursor:default}
+  .act:disabled:active .ring{transform:none;box-shadow:var(--shadow)}
+
+  /* ---------- lists ---------- */
+  .tabs{display:flex;gap:8px;margin-top:8px}
+  .tab{
+    flex:1;border:2.5px solid var(--ink);border-radius:14px;
+    background:var(--white);font:inherit;font-weight:800;font-size:14px;
+    padding:9px;cursor:pointer;
+  }
+  .tab.active{background:var(--ink);color:var(--butter)}
+  ul.list{list-style:none;display:flex;flex-direction:column;gap:8px}
+  ul.list li{
+    display:flex;align-items:center;gap:10px;
+    border:2.5px solid var(--ink);border-radius:14px;
+    background:var(--white);padding:10px 12px;
+    font-weight:600;font-size:15px;
+  }
+  ul.list li .txt{flex:1;overflow-wrap:anywhere}
+  ul.list li.done .txt{text-decoration:line-through;opacity:.45}
+  .check{
+    width:26px;height:26px;flex:none;border-radius:50%;
+    border:2.5px solid var(--ink);background:var(--white);
+    cursor:pointer;font-size:14px;line-height:1;color:var(--white);
+  }
+  li.done .check{background:var(--go)}
+  .mini{
+    border:2px solid var(--ink);border-radius:10px;background:var(--butter-deep);
+    font:inherit;font-size:12px;font-weight:800;padding:4px 9px;cursor:pointer;white-space:nowrap;
+  }
+  .del{border:none;background:none;font-size:15px;cursor:pointer;opacity:.4;padding:2px}
+  .del:hover{opacity:1}
+  .list-empty{text-align:center;font-weight:600;opacity:.5;font-size:14px;padding:14px 0}
+
+  /* confetti */
+  .confetti{position:fixed;top:-12px;width:10px;height:10px;border-radius:3px;pointer-events:none;z-index:99;
+    animation:fall linear forwards}
+  @keyframes fall{to{transform:translateY(105vh) rotate(720deg)}}
+
+  @media (prefers-reduced-motion: reduce){
+    .circle.animate{transition:none}
+    .confetti{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>מדפדף המשימות<span class="dot">.</span></h1>
+    <div class="date" id="dateLabel"></div>
+  </header>
+
+  <div class="add-row">
+    <input id="taskInput" type="text" maxlength="80" placeholder="משימה חדשה לערימה…">
+    <button class="size-toggle" id="sizeToggle" title="גודל המשימה">קטנה</button>
+    <button class="btn-add" id="addBtn" aria-label="הוספה">+</button>
+  </div>
+
+  <div class="deck" id="deck"></div>
+
+  <div class="actions">
+    <button class="act no" id="btnNo"><span class="ring">😴</span><span>לפעם אחרת</span></button>
+    <button class="act undo" id="btnUndo" disabled><span class="ring">↩️</span><span>ביטול</span></button>
+    <button class="act yes" id="btnYes"><span class="ring">💪</span><span>עושים היום!</span></button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="today" id="tabToday">היום (0)</button>
+    <button class="tab" data-tab="later" id="tabLater">לפעם אחרת (0)</button>
+  </div>
+  <ul class="list" id="listArea"></ul>
+</div>
+
+<script>
+(function(){
+  const KEY='tinder-tasks-v1';
+  const todayStr=()=>new Date().toISOString().slice(0,10);
+
+  let state=load();
+  let history=[];           // swipe undo stack
+  let activeTab='today';
+  let addSize='small';
+
+  function load(){
+    try{
+      const s=JSON.parse(localStorage.getItem(KEY));
+      if(s && Array.isArray(s.tasks)){
+        // new day? everything unfinished returns to the pile for re-sorting
+        if(s.lastDay!==todayStr()){
+          s.tasks=s.tasks.filter(t=>t.status!=='done');
+          s.tasks.forEach(t=>t.status='pile');
+          s.lastDay=todayStr();
+        }
+        return s;
+      }
+    }catch(e){}
+    return {lastDay:todayStr(),tasks:[
+      {id:1,text:'להחליק אותי ימינה כדי לעשות היום 👉',size:'small',status:'pile'},
+      {id:2,text:'להחליק אותי שמאלה — לפעם אחרת 👈',size:'small',status:'pile'},
+      {id:3,text:'להוסיף משימה אמיתית למעלה ➕',size:'big',status:'pile'}
+    ]};
+  }
+  function save(){localStorage.setItem(KEY,JSON.stringify(state));}
+
+  const pile=()=>state.tasks.filter(t=>t.status==='pile');
+
+  /* ---------- header date ---------- */
+  document.getElementById('dateLabel').textContent=
+    new Date().toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long'});
+
+  /* ---------- face svg ---------- */
+  function faceSVG(){return `
+  <svg class="face" viewBox="0 0 74 60">
+    <circle class="eye-l" cx="20" cy="22" r="5" fill="#33302E"/>
+    <circle class="eye-r" cx="54" cy="22" r="5" fill="#33302E"/>
+    <path class="eye-closed-l" d="M13 22 Q20 15 27 22" stroke="#33302E" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    <path class="eye-closed-r" d="M47 22 Q54 15 61 22" stroke="#33302E" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    <path class="mouth-normal" d="M29 40 Q37 46 45 40" stroke="#33302E" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    <path class="mouth-happy" d="M25 38 Q37 52 49 38" stroke="#33302E" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    <ellipse class="mouth-sleepy" cx="37" cy="43" rx="5" ry="6" fill="#33302E"/>
+    <text class="zzz" x="63" y="12" font-size="13" font-weight="900" fill="#6DA7FF">z</text>
+    <circle cx="12" cy="34" r="4.5" fill="#FFD3C2" opacity=".8"/>
+    <circle cx="62" cy="34" r="4.5" fill="#FFD3C2" opacity=".8"/>
+  </svg>`;}
+
+  /* ---------- deck render ---------- */
+  const deck=document.getElementById('deck');
+  function renderDeck(){
+    deck.innerHTML='';
+    const p=pile();
+    if(!p.length){
+      const doneCount=state.tasks.filter(t=>t.status==='today').length;
+      deck.innerHTML=`<div class="empty">
+        <div class="big-emoji">🎉</div>
+        <p>סידרת את הערימה!</p>
+        <small>${doneCount? 'יש לך '+doneCount+' משימות להיום. קדימה!' : 'הוסיפו משימות למעלה כדי להתחיל לדפדף'}</small>
+      </div>`;
+      updateButtons();return;
+    }
+    if(p[1]){
+      const b=document.createElement('div');
+      b.className='circle behind';
+      deck.appendChild(b);
+    }
+    const t=p[0];
+    const c=document.createElement('div');
+    c.className='circle';
+    c.innerHTML=`
+      <div class="stamp yes">היום!</div>
+      <div class="stamp no">אחר כך</div>
+      ${faceSVG()}
+      <div class="task-text"></div>
+      <div class="badge ${t.size==='big'?'big':''}">${t.size==='big'?'משימה גדולה':'משימה קטנה'}</div>
+      <div class="pile-count">עוד ${p.length-1} בערימה</div>`;
+    c.querySelector('.task-text').textContent=t.text;
+    deck.appendChild(c);
+    attachDrag(c,t);
+    updateButtons();
+  }
+
+  /* ---------- drag ---------- */
+  const TH=95;
+  function attachDrag(card,task){
+    let startX=0,dx=0,down=false;
+    card.addEventListener('pointerdown',e=>{
+      down=true;startX=e.clientX;dx=0;
+      card.classList.add('dragging');
+      card.setPointerCapture(e.pointerId);
+    });
+    card.addEventListener('pointermove',e=>{
+      if(!down)return;
+      dx=e.clientX-startX;
+      card.style.transform=`translateX(${dx}px) rotate(${dx*0.07}deg)`;
+      const y=card.querySelector('.stamp.yes'),n=card.querySelector('.stamp.no');
+      y.style.opacity=Math.min(1,Math.max(0,dx/TH));
+      n.style.opacity=Math.min(1,Math.max(0,-dx/TH));
+      card.classList.toggle('mood-happy',dx>30);
+      card.classList.toggle('mood-sleepy',dx<-30);
+    });
+    const end=()=>{
+      if(!down)return;down=false;
+      card.classList.remove('dragging');
+      if(dx>TH){fly(card,1,()=>sort(task,'today'));}
+      else if(dx<-TH){fly(card,-1,()=>sort(task,'later'));}
+      else{
+        card.classList.add('animate');
+        card.style.transform='';
+        card.classList.remove('mood-happy','mood-sleepy');
+        card.querySelector('.stamp.yes').style.opacity=0;
+        card.querySelector('.stamp.no').style.opacity=0;
+      }
+    };
+    card.addEventListener('pointerup',end);
+    card.addEventListener('pointercancel',end);
+  }
+  function fly(card,dir,cb){
+    card.classList.add('animate');
+    card.style.transform=`translateX(${dir*560}px) rotate(${dir*30}deg)`;
+    card.style.opacity='0';
+    setTimeout(cb,240);
+  }
+
+  function sort(task,dest){
+    task.status=dest;
+    history.push(task.id);
+    save();renderDeck();renderList();
+  }
+
+  /* ---------- buttons ---------- */
+  const btnYes=document.getElementById('btnYes'),
+        btnNo=document.getElementById('btnNo'),
+        btnUndo=document.getElementById('btnUndo');
+  function updateButtons(){
+    const has=pile().length>0;
+    btnYes.disabled=btnNo.disabled=!has;
+    btnUndo.disabled=!history.length;
+  }
+  function buttonSwipe(dir){
+    const p=pile();if(!p.length)return;
+    const card=deck.querySelector('.circle:not(.behind)');
+    card.classList.add(dir>0?'mood-happy':'mood-sleepy');
+    card.querySelector(dir>0?'.stamp.yes':'.stamp.no').style.opacity=1;
+    fly(card,dir,()=>sort(p[0],dir>0?'today':'later'));
+  }
+  btnYes.addEventListener('click',()=>buttonSwipe(1));
+  btnNo.addEventListener('click',()=>buttonSwipe(-1));
+  btnUndo.addEventListener('click',()=>{
+    const id=history.pop();
+    const t=state.tasks.find(t=>t.id===id);
+    if(t){t.status='pile';state.tasks=[t,...state.tasks.filter(x=>x!==t)];}
+    save();renderDeck();renderList();
+  });
+
+  /* ---------- add ---------- */
+  const input=document.getElementById('taskInput'),
+        sizeToggle=document.getElementById('sizeToggle');
+  sizeToggle.addEventListener('click',()=>{
+    addSize=addSize==='small'?'big':'small';
+    sizeToggle.textContent=addSize==='big'?'גדולה':'קטנה';
+    sizeToggle.classList.toggle('big',addSize==='big');
+  });
+  function addTask(){
+    const text=input.value.trim();
+    if(!text)return;
+    state.tasks.push({id:Date.now(),text,size:addSize,status:'pile'});
+    input.value='';
+    save();renderDeck();renderList();
+  }
+  document.getElementById('addBtn').addEventListener('click',addTask);
+  input.addEventListener('keydown',e=>{if(e.key==='Enter')addTask();});
+
+  /* ---------- lists ---------- */
+  const listArea=document.getElementById('listArea'),
+        tabToday=document.getElementById('tabToday'),
+        tabLater=document.getElementById('tabLater');
+  [tabToday,tabLater].forEach(tab=>tab.addEventListener('click',()=>{
+    activeTab=tab.dataset.tab;
+    tabToday.classList.toggle('active',activeTab==='today');
+    tabLater.classList.toggle('active',activeTab==='later');
+    renderList();
+  }));
+
+  function renderList(){
+    const today=state.tasks.filter(t=>t.status==='today'||t.status==='done');
+    const later=state.tasks.filter(t=>t.status==='later');
+    tabToday.textContent=`היום (${today.filter(t=>t.status==='today').length})`;
+    tabLater.textContent=`לפעם אחרת (${later.length})`;
+    listArea.innerHTML='';
+    const items=activeTab==='today'?today:later;
+    if(!items.length){
+      listArea.innerHTML=`<div class="list-empty">${activeTab==='today'
+        ?'עדיין אין משימות להיום — החליקו ימינה 👉'
+        :'אין משימות שנדחו. כל הכבוד! ✨'}</div>`;
+      return;
+    }
+    items.forEach(t=>{
+      const li=document.createElement('li');
+      if(t.status==='done')li.classList.add('done');
+      const txt=document.createElement('span');
+      txt.className='txt';txt.textContent=t.text;
+      if(activeTab==='today'){
+        const ch=document.createElement('button');
+        ch.className='check';ch.textContent=t.status==='done'?'✓':'';
+        ch.setAttribute('aria-label','סימון כבוצע');
+        ch.addEventListener('click',()=>{
+          t.status=t.status==='done'?'today':'done';
+          save();renderList();
+          if(t.status==='done'&&!state.tasks.some(x=>x.status==='today'))confetti();
+        });
+        li.append(ch,txt);
+      }else{
+        const back=document.createElement('button');
+        back.className='mini';back.textContent='לערימה ↩';
+        back.addEventListener('click',()=>{
+          t.status='pile';save();renderDeck();renderList();
+        });
+        li.append(txt,back);
+      }
+      const del=document.createElement('button');
+      del.className='del';del.textContent='🗑';
+      del.setAttribute('aria-label','מחיקה');
+      del.addEventListener('click',()=>{
+        state.tasks=state.tasks.filter(x=>x!==t);
+        history=history.filter(id=>id!==t.id);
+        save();renderDeck();renderList();
+      });
+      li.append(del);
+      listArea.appendChild(li);
+    });
+  }
+
+  /* ---------- confetti ---------- */
+  function confetti(){
+    const colors=['#3DBB7E','#FF9B71','#6DA7FF','#FFE58A','#FF6B9D'];
+    for(let i=0;i<36;i++){
+      const c=document.createElement('div');
+      c.className='confetti';
+      c.style.left=Math.random()*100+'vw';
+      c.style.background=colors[i%colors.length];
+      c.style.animationDuration=(1.4+Math.random()*1.4)+'s';
+      c.style.animationDelay=(Math.random()*.4)+'s';
+      document.body.appendChild(c);
+      setTimeout(()=>c.remove(),3400);
+    }
+  }
+
+  renderDeck();renderList();
+
+  /* ---------- offline (PWA) ---------- */
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  }
+})();
+</script>
+</body>
+</html>
