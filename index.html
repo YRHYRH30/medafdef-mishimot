@@ -303,14 +303,18 @@
         return migrateDay(s);
       }
     }catch(e){}
-    return {rev:0,pot:0,lastDay:todayStr(),tasks:[
-      {id:1,text:'להחליק אותי ימינה כדי לעשות היום 👉',size:'small',status:'pile'},
-      {id:2,text:'להחליק אותי שמאלה — לפעם אחרת 👈',size:'small',status:'pile'},
-      {id:3,text:'להוסיף משימה אמיתית למעלה ➕',size:'big',status:'pile'}
-    ]};
+    return {rev:0,pot:0,mt:0,lastDay:todayStr(),tasks:[]};
+  }
+  // old demo/instruction cards must never live as real tasks
+  const DEMO=/להחליק אותי|להוסיף משימה אמיתית/;
+  function purgeDemo(s){
+    const n=s.tasks.length;
+    s.tasks=s.tasks.filter(t=>!DEMO.test(t.text||''));
+    return n!==s.tasks.length;
   }
   function save(){
     state.rev=(state.rev||0)+1;
+    state.mt=Date.now();
     delete state.migrated;
     localStorage.setItem(KEY,JSON.stringify(state));
     push();
@@ -320,29 +324,47 @@
   const SYNC_URL='https://jsonblob.com/api/jsonBlob/019f3385-5a08-7059-b484-ec374ba7bdab';
   const dot=()=>document.getElementById('syncDot');
   function setDot(ok){const d=dot();if(d)d.className='sync-dot '+(ok?'on':'off');}
+  let dirty=false;                                  // unsent local changes → retry until delivered
   function push(){
     fetch(SYNC_URL,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)})
-      .then(r=>setDot(r.ok)).catch(()=>setDot(false));
+      .then(r=>{setDot(r.ok);dirty=!r.ok;})
+      .catch(()=>{setDot(false);dirty=true;});
   }
   function pull(){
     fetch(SYNC_URL,{cache:'no-store'}).then(r=>r.json()).then(remote=>{
       setDot(true);
+      if(dirty){push();return;}
       if(!remote||!Array.isArray(remote.tasks))return;
       remote.pot=remote.pot||0;
       const rRev=remote.rev||0, lRev=state.rev||0;
-      if(rRev>lRev){
+      const rMt=remote.mt||0, lMt=state.mt||0;
+      if(rRev>lRev || (rRev===lRev && rMt>lMt)){
         remote.migrated=false;
-        state=migrateDay(remote);
-        if(state.migrated){save();}                 // day rolled over on adopt → publish reset
-        else localStorage.setItem(KEY,JSON.stringify(state));
+        if(lRev===0 && state.tasks.length){
+          // first sync on this device: merge with cloud so nothing is lost
+          const ids=new Set(remote.tasks.map(t=>t.id));
+          remote.tasks=remote.tasks.concat(state.tasks.filter(t=>!ids.has(t.id)));
+          remote.pot=Math.max(remote.pot||0,state.pot||0);
+          state=migrateDay(remote);
+          purgeDemo(state);
+          save();
+        }else{
+          state=migrateDay(remote);
+          const changed=state.migrated||purgeDemo(state);
+          if(changed){save();}                      // day reset / demo cleanup on adopt → publish
+          else localStorage.setItem(KEY,JSON.stringify(state));
+        }
         history=[];
         renderDeck();renderList();
-      }else if(lRev>rRev){push();}                  // we're ahead (offline edits) → publish
+      }else if(lRev>rRev || (lRev===rRev && lMt>rMt)){push();}  // we're ahead → publish
     }).catch(()=>setDot(false));
   }
+  if(purgeDemo(state)){save();}
   pull();
   setInterval(()=>{if(!document.hidden)pull();},4000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)pull();});
+  window.addEventListener('online',pull);
+  window.addEventListener('focus',pull);
 
   const pile=()=>state.tasks.filter(t=>t.status==='pile');
 
@@ -375,7 +397,7 @@
       deck.innerHTML=`<div class="empty">
         <div class="big-emoji">🎉</div>
         <p>סידרת את הערימה!</p>
-        <small>${doneCount? 'יש לך '+doneCount+' משימות להיום. קדימה!' : 'הוסיפו משימות למעלה כדי להתחיל לדפדף'}</small>
+        <small>${doneCount? 'יש לך '+doneCount+' משימות להיום. קדימה!' : 'מוסיפים משימה למעלה — ואז מחליקים: ימינה = עושים היום, שמאלה = לפעם אחרת'}</small>
       </div>`;
       updateButtons();return;
     }
