@@ -48,10 +48,12 @@
   .side{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
   .date{font-size:13px;font-weight:600;opacity:.65;display:flex;align-items:center;gap:6px}
   .pot{
-    font-size:14px;font-weight:900;
+    font:inherit;font-size:14px;font-weight:900;
     border:2.5px solid var(--ink);border-radius:999px;
-    background:var(--white);padding:3px 12px;
+    background:var(--white);padding:3px 12px;cursor:pointer;
   }
+  .pot:active{background:var(--butter-deep)}
+  .ver{text-align:center;font-size:11px;font-weight:600;opacity:.35;margin-top:6px}
   .sync-dot{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--ink);display:inline-block;flex:none}
   .sync-dot.on{background:var(--go)}
   .sync-dot.off{background:#d8cfb6}
@@ -240,7 +242,7 @@
     <h1>מדפדף המשימות<span class="dot">.</span></h1>
     <div class="side">
       <div class="date"><span class="sync-dot off" id="syncDot" title="סנכרון"></span><span id="dateLabel"></span></div>
-      <div class="pot" id="potLabel">💰 0 ₪</div>
+      <button class="pot" id="potLabel" title="לחיצה = איפוס הקופה">💰 0 ₪</button>
     </div>
   </header>
 
@@ -271,6 +273,7 @@
     <button class="tab" data-tab="later" id="tabLater">לפעם אחרת (0)</button>
   </div>
   <ul class="list" id="listArea"></ul>
+  <div class="ver">גרסה 5</div>
 </div>
 
 <script>
@@ -545,6 +548,12 @@
   function renderPot(){
     document.getElementById('potLabel').textContent='💰 '+(state.pot||0)+' ₪';
   }
+  document.getElementById('potLabel').addEventListener('click',()=>{
+    if(!(state.pot>0))return;
+    if(confirm('לאפס את הקופה? ('+state.pot+' ₪ יימחקו)')){
+      state.pot=0;save();renderPot();
+    }
+  });
 
   function renderList(){
     renderPot();
@@ -621,7 +630,10 @@
 
   /* ---------- offline (PWA) ---------- */
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
+    navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{
+      reg.update();
+      document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update();});
+    }).catch(()=>{});
   }
 })();
 </script>
